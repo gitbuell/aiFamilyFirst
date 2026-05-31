@@ -3,7 +3,7 @@ import {
   Lock, Eye, EyeOff, ChevronRight, User, Stethoscope, Users,
   Moon, Sun, LogOut, Home, Pill, Mic, Upload, FileText,
   AlertCircle, CheckCircle2, Clock, Send, Save, ClipboardList, ArrowLeft,
-  Activity, Mail, Camera, Plus, X,
+  Activity, Mail, Camera, Plus, X, ShieldAlert, MessageCircle,
 } from 'lucide-react';
 import { PatientsTab, profileToPatient } from './NPPatients.jsx';
 
@@ -21,6 +21,74 @@ const getInitialTheme = () => {
   }
 };
 
+const nowLabel = () => {
+  try {
+    return new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return 'Just now';
+  }
+};
+
+// Medications are a structured list: { name, dose, usage }. Quick-pick presets
+// for the most common meds so the guardian can add one in a tap, then tweak.
+const COMMON_MEDS = [
+  { name: 'Cetirizine', dose: '10 mg', usage: 'Once daily for allergies' },
+  { name: 'Acetaminophen', dose: '500 mg', usage: 'Every 6 h as needed for pain/fever' },
+  { name: 'Ibuprofen', dose: '200 mg', usage: 'Every 6–8 h with food, as needed for pain' },
+  { name: 'Amoxicillin', dose: '500 mg', usage: 'Three times daily until finished' },
+  { name: 'Albuterol', dose: '2 puffs', usage: 'As needed for wheezing/shortness of breath' },
+  { name: 'Lisinopril', dose: '10 mg', usage: 'Once daily for blood pressure' },
+];
+
+// Backward-compat: older saved profiles stored medications as a freeform string.
+// Normalize any value to a list of { name, dose, usage }.
+const toMedList = (meds) => {
+  if (Array.isArray(meds)) return meds;
+  if (typeof meds === 'string' && meds.trim()) {
+    return meds
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => ({ name: line, dose: '', usage: '' }));
+  }
+  return [];
+};
+
+// One-line label for a med, used in summaries / the NP roster.
+const medLabel = (m) =>
+  [m.name, m.dose].filter(Boolean).join(' ') + (m.usage ? ` — ${m.usage}` : '');
+
+const medsToText = (meds) => toMedList(meds).map(medLabel).join('; ');
+
+// Recommended-action items derived from the meds list, so the home screen's
+// reminders track each medication's actual dosage schedule from the profile.
+const medScheduleActions = (meds) =>
+  toMedList(meds)
+    .filter((m) => m.name)
+    .map((m, i) => ({
+      key: `${m.name}-${i}`,
+      name: m.name,
+      dose: m.dose,
+      usage: m.usage,
+    }));
+
+// Allergies: the most common allergens are yes/no toggle chips; anything else
+// goes in a freeform "other" field. Selected chips are stored as a string array.
+const COMMON_ALLERGENS = [
+  'Penicillin', 'Pollen', 'Peanuts', 'Tree nuts', 'Shellfish',
+  'Eggs', 'Milk / Dairy', 'Soy', 'Latex', 'Dust mites',
+  'Bee stings', 'Aspirin / NSAIDs',
+];
+
+const toAllergenList = (a) => (Array.isArray(a) ? a : []);
+
+// Combine selected allergen chips + freeform "other" into one display string.
+const allergiesToText = (allergens, other) => {
+  const list = [...toAllergenList(allergens)];
+  if (other && other.trim()) list.push(other.trim());
+  return list.join('; ') || 'None reported';
+};
+
 // Patient intake profile — what the guardian fills in for the NP's assessment.
 const DEFAULT_PROFILE = {
   patientName: 'Jordan Lee',
@@ -30,8 +98,9 @@ const DEFAULT_PROFILE = {
   bp: '118/76',
   hr: '72',
   extraVitals: [{ label: 'Temperature', value: '98.6°F' }],
-  allergies: 'Penicillin (rash); pollen',
-  medications: 'Cetirizine 10 mg, once daily',
+  allergens: ['Penicillin', 'Pollen'],
+  allergies: '', // freeform "other" allergens / details beyond the chips
+  medications: [{ name: 'Cetirizine', dose: '10 mg', usage: 'Once daily for seasonal allergies' }],
   conditions: 'Seasonal allergic rhinitis',
   familyHistory: 'Mother: asthma. Father: hypertension.',
   concerns: 'Frequent morning congestion; occasional mild wheeze.',
@@ -41,7 +110,8 @@ const DEFAULT_PROFILE = {
 const getInitialProfile = () => {
   try {
     const s = localStorage.getItem('aiff-profile');
-    return s ? { ...DEFAULT_PROFILE, ...JSON.parse(s) } : DEFAULT_PROFILE;
+    const merged = s ? { ...DEFAULT_PROFILE, ...JSON.parse(s) } : DEFAULT_PROFILE;
+    return { ...merged, medications: toMedList(merged.medications), allergens: toAllergenList(merged.allergens) };
   } catch {
     return DEFAULT_PROFILE;
   }
@@ -54,6 +124,33 @@ const getInitialSubmitted = () => {
     return false;
   }
 };
+
+// NP (practitioner) profile — who the clinician is, not a patient record.
+const DEFAULT_NP_PROFILE = {
+  name: 'MalToy Lewis',
+  credentials: 'MSN, FNP-BC',
+  organization: 'Aibuell Health Clinic',
+  npi: '1234567890',
+  email: 'maltoy@aibuell-health.org',
+  phone: '(555) 200-3040',
+};
+
+const getInitialNpProfile = () => {
+  try {
+    const s = localStorage.getItem('aiff-np-profile');
+    return s ? { ...DEFAULT_NP_PROFILE, ...JSON.parse(s) } : DEFAULT_NP_PROFILE;
+  } catch {
+    return DEFAULT_NP_PROFILE;
+  }
+};
+
+// Reference tools/materials surfaced on the NP profile page.
+const NP_REFERENCES = [
+  { label: 'Pediatric dosing reference', detail: 'Weight-based mg/kg dosing tables', url: 'https://www.merckmanuals.com/professional/pediatrics' },
+  { label: 'Drug interaction checker', detail: 'Check multi-med interactions', url: 'https://www.drugs.com/drug_interactions.html' },
+  { label: 'CDC immunization schedules', detail: 'Child & adult schedules', url: 'https://www.cdc.gov/vaccines/schedules/' },
+  { label: 'Lab reference ranges', detail: 'Normal values by age', url: 'https://www.merckmanuals.com/professional/resources/normal-laboratory-values' },
+];
 
 // Intake submissions (any source) queued for NP assessment. Seeded with a
 // sample doctor email so the NP view demonstrates the assessment queue.
@@ -84,9 +181,25 @@ const getInitialSubmissions = () => {
   }
 };
 
+// Care-team chat thread (family ↔ NP). Demo persists to localStorage so the
+// conversation is shared across role views — send as the family, switch to the
+// NP view, and reply to the same thread.
+const SEED_MESSAGES = [
+  { id: 'seed-msg-1', side: 'np', text: 'Hi Jordan — your allergy plan looks good. Keep taking cetirizine once daily and let us know if the morning symptoms continue. See you on the 14th.', date: 'Jun 12, 9:10 AM' },
+];
+
+const getInitialMessages = () => {
+  try {
+    const s = localStorage.getItem('aiff-messages');
+    return s ? JSON.parse(s) : SEED_MESSAGES;
+  } catch {
+    return SEED_MESSAGES;
+  }
+};
+
 const ROLES = {
   self: { greeting: 'Signed in as Jordan Lee (age 34)', emoji: '🧑' },
-  np: { greeting: 'Signed in as MalToy (NP)', emoji: '👨‍⚕️' },
+  np: { greeting: 'Signed in as MalToy (Practitioner)', emoji: '👨‍⚕️' },
   child: { greeting: 'Signed in as Alex (age 8)', emoji: '👧' },
   parent: { greeting: 'Signed in as Sarah (Parent)', emoji: '👨‍👩‍👧' },
 };
@@ -101,10 +214,23 @@ const DEFAULT_TABS = [
 const NP_TABS = [
   { key: 'home', label: 'Home', Icon: Home },
   { key: 'patients', label: 'Patients', Icon: Users },
+  { key: 'messages', label: 'Messages', Icon: MessageCircle },
   { key: 'intake', label: 'Intake', Icon: Mic },
 ];
 
 const tabsForRole = (role) => (role === 'np' ? NP_TABS : DEFAULT_TABS);
+
+// Header greeting. For the patient ('self') role it reflects the live profile's
+// patient name + age so editing the profile updates the signed-in name.
+const headerGreeting = (role, profile, npProfile) => {
+  if (role === 'self' && profile?.patientName) {
+    return `Signed in as ${profile.patientName}${profile.age ? ` (age ${profile.age})` : ''}`;
+  }
+  if (role === 'np' && npProfile?.name) {
+    return `Signed in as ${npProfile.name} (Practitioner)`;
+  }
+  return ROLES[role]?.greeting;
+};
 
 const FamilyHealthApp = () => {
   const [theme, setTheme] = useState(getInitialTheme);
@@ -115,6 +241,8 @@ const FamilyHealthApp = () => {
   const [profile, setProfile] = useState(getInitialProfile);
   const [submitted, setSubmitted] = useState(getInitialSubmitted);
   const [submissions, setSubmissions] = useState(getInitialSubmissions);
+  const [messages, setMessages] = useState(getInitialMessages);
+  const [npProfile, setNpProfile] = useState(getInitialNpProfile);
 
   // login form (stub)
   const [email, setEmail] = useState('');
@@ -138,10 +266,38 @@ const FamilyHealthApp = () => {
     try { localStorage.setItem('aiff-submissions', JSON.stringify(submissions)); } catch { /* ignore */ }
   }, [submissions]);
 
+  useEffect(() => {
+    try { localStorage.setItem('aiff-messages', JSON.stringify(messages)); } catch { /* ignore */ }
+  }, [messages]);
+
+  useEffect(() => {
+    try { localStorage.setItem('aiff-np-profile', JSON.stringify(npProfile)); } catch { /* ignore */ }
+  }, [npProfile]);
+
+  const sendMessage = (side, text) =>
+    setMessages((list) => [...list, { id: `msg-${Date.now()}`, side, text, date: nowLabel() }]);
+
   const addSubmission = (sub) =>
-    setSubmissions((list) => [{ id: `sub-${Date.now()}`, status: 'pending', date: 'Just now', ...sub }, ...list]);
-  const assessSubmission = (id, status) =>
-    setSubmissions((list) => list.map((s) => (s.id === id ? { ...s, status } : s)));
+    setSubmissions((list) => [{ id: `sub-${Date.now()}`, status: 'pending', date: nowLabel(), mine: true, ...sub }, ...list]);
+  const assessSubmission = (id, status, note) =>
+    setSubmissions((list) => list.map((s) => (s.id === id ? { ...s, status, ...(note !== undefined ? { npNote: note } : {}) } : s)));
+
+  // Submitting the profile intake also drops an item in the assessment queue
+  // (so it confirms on the patient's Home and reaches the NP).
+  const submitProfileIntake = (form) => {
+    setSubmitted(true);
+    addSubmission({
+      type: 'intake',
+      title: `Profile intake — ${form.patientName}`,
+      patient: form.patientName,
+      summary: [
+        ['Allergies', allergiesToText(form.allergens, form.allergies)],
+        ['Medications', medsToText(form.medications)],
+        ['Conditions', form.conditions],
+        ['Concerns', form.concerns],
+      ],
+    });
+  };
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
@@ -212,11 +368,11 @@ const FamilyHealthApp = () => {
 
           <div className="demo-list">
             <button className="demo-btn" onClick={() => enterDemo('self')}>
-              <span className="demo-btn-icon"><User size={18} /> 🧑 Self-Patient Demo (Adult)</span>
+              <span className="demo-btn-icon"><User size={18} /> 🧑 Patient View</span>
               <ChevronRight size={18} className="demo-btn-chevron" />
             </button>
             <button className="demo-btn" onClick={() => enterDemo('np')}>
-              <span className="demo-btn-icon"><Stethoscope size={18} /> 👨‍⚕️ NP Demo (MalToy)</span>
+              <span className="demo-btn-icon"><Stethoscope size={18} /> 👨‍⚕️ Practitioner View</span>
               <ChevronRight size={18} className="demo-btn-chevron" />
             </button>
           </div>
@@ -237,7 +393,7 @@ const FamilyHealthApp = () => {
       <header className="app-header">
         <div className="app-header-brand">
           <span className="app-header-title">aiFamilyFirst</span>
-          <span className="app-header-greeting">{ROLES[role]?.greeting}</span>
+          <span className="app-header-greeting">{headerGreeting(role, profile, npProfile)}</span>
         </div>
         <div className="app-header-actions">
           <button
@@ -260,19 +416,28 @@ const FamilyHealthApp = () => {
 
       <main className="main-content">
         {showProfile ? (
-          <ProfilePage
-            profile={profile}
-            onChange={setProfile}
-            submitted={submitted}
-            onSubmit={() => setSubmitted(true)}
-            onClose={() => setShowProfile(false)}
-          />
+          role === 'np' ? (
+            <NPProfilePage
+              profile={npProfile}
+              onChange={setNpProfile}
+              onClose={() => setShowProfile(false)}
+            />
+          ) : (
+            <ProfilePage
+              profile={profile}
+              onChange={setProfile}
+              submitted={submitted}
+              onSubmit={submitProfileIntake}
+              onClose={() => setShowProfile(false)}
+            />
+          )
         ) : (
           <>
             {activeTab === 'home' && <HomeTab role={role} profile={profile} submitted={submitted} submissions={submissions} onAssess={assessSubmission} onOpenProfile={() => setShowProfile(true)} onNavigate={setActiveTab} />}
-            {activeTab === 'meds' && <MedsTab role={role} />}
-            {activeTab === 'family' && <FamilyTab role={role} />}
+            {activeTab === 'meds' && <MedsTab role={role} profile={profile} />}
+            {activeTab === 'family' && <FamilyTab role={role} messages={messages} onSend={sendMessage} />}
             {activeTab === 'patients' && <PatientsTab live={profileToPatient(profile, submitted)} />}
+            {activeTab === 'messages' && <MessagesTab messages={messages} onSend={sendMessage} />}
             {activeTab === 'intake' && <IntakeTab addSubmission={addSubmission} />}
           </>
         )}
@@ -306,6 +471,46 @@ const SOURCE_META = {
   email: { label: 'Email', Icon: Mail },
   notes: { label: 'Notes', Icon: ClipboardList },
   photo: { label: 'Photo', Icon: Camera },
+  intake: { label: 'Intake', Icon: ClipboardList },
+};
+
+const STATUS_BADGE = {
+  pending: ['badge-warning', 'Awaiting NP review'],
+  assessed: ['badge-success', 'Reviewed by NP'],
+  flagged: ['badge-warning', 'Needs clarification'],
+};
+
+// Patient-facing confirmation of what they've recently submitted for review.
+const RecentUpdates = ({ submissions = [] }) => {
+  const recent = submissions.filter((s) => s.mine).slice(0, 3);
+  if (recent.length === 0) return null;
+  return (
+    <div className="card">
+      <h3 className="card-title"><CheckCircle2 size={18} /> Recent Updates</h3>
+      <p className="card-lead">Confirmation of what you've sent to your care team.</p>
+      <ul className="list">
+        {recent.map((s) => {
+          const M = SOURCE_META[s.type] || SOURCE_META.notes;
+          const [cls, text] = STATUS_BADGE[s.status] || STATUS_BADGE.pending;
+          return (
+            <li className="list-row" key={s.id}>
+              <M.Icon size={18} className="list-row-icon" />
+              <span style={{ flex: 1 }}>
+                {s.title}<br />
+                <span className="text-muted" style={{ fontSize: '0.8rem' }}>{s.date}</span>
+                {s.status === 'flagged' && s.npNote && (
+                  <span style={{ display: 'block', fontSize: '0.8rem', marginTop: 4 }}>
+                    <strong>NP asks:</strong> {s.npNote}
+                  </span>
+                )}
+              </span>
+              <span className={`badge ${cls}`}>{text}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 };
 
 const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenProfile, onNavigate }) => {
@@ -342,6 +547,7 @@ const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenP
           <p className="hero-text">Your latest AI-reviewed update, in plain language. You're in control of what's shared with your care team.</p>
           <p className="hero-meta">Last reviewed June 12, 2026</p>
         </div>
+        <RecentUpdates submissions={submissions} />
         <div className="alert alert-info">
           <AlertCircle size={20} />
           <div>
@@ -357,26 +563,20 @@ const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenP
         <div className="card">
           <h3 className="card-title"><CheckCircle2 size={18} /> Recommended Actions</h3>
           <ul className="list">
-            <li className="list-row">
-              <CheckCircle2 size={18} className="list-row-icon" />
-              <span>Refill cetirizine before your next dose runs out.</span>
-            </li>
+            {medScheduleActions(profile?.medications).map((a) => (
+              <li className="list-row" key={a.key}>
+                <Pill size={18} className="list-row-icon" />
+                <span>
+                  Take <strong>{a.name}{a.dose ? ` ${a.dose}` : ''}</strong>
+                  {a.usage ? <> — <span className="text-muted">{a.usage}</span></> : null}
+                </span>
+              </li>
+            ))}
             <li className="list-row">
               <Clock size={18} className="list-row-icon" />
               <span>Allergy follow-up: Friday, June 14, 2026 at 2:30 PM.</span>
             </li>
           </ul>
-        </div>
-        <div className="card card-accent">
-          <h3 className="card-title"><ClipboardList size={18} /> Intake for the NP</h3>
-          <p className="card-lead">
-            {submitted
-              ? 'Your intake has been submitted for the NP to assess.'
-              : 'Add your health details so the NP can assess them.'}
-          </p>
-          <button className="btn btn-ghost" onClick={onOpenProfile}>
-            <User size={16} /> {submitted ? 'Update my intake' : 'Complete my intake'}
-          </button>
         </div>
       </>
     );
@@ -384,6 +584,7 @@ const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenP
 
   if (role === 'np') {
     const activePatients = submitted ? 3 : 2;
+    const awaitingAssessment = submissions.filter((s) => s.status === 'pending').length;
     return (
       <>
         <h1 className="page-title">Dashboard</h1>
@@ -395,6 +596,10 @@ const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenP
           <div className="stat-item">
             <AlertCircle size={22} className="stat-icon" />
             <div><p className="stat-value">2</p><p className="stat-label">Pending approvals</p></div>
+          </div>
+          <div className="stat-item">
+            <ClipboardList size={22} className="stat-icon" />
+            <div><p className="stat-value">{awaitingAssessment}</p><p className="stat-label">Awaiting assessment</p></div>
           </div>
         </div>
 
@@ -439,6 +644,7 @@ const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenP
         <p className="hero-text">Latest AI-reviewed update, in plain language. Nothing reaches your child until you approve it.</p>
         <p className="hero-meta">Source: Dr. Johnson (Pediatrician) · Reviewed June 12, 2026</p>
       </div>
+      <RecentUpdates submissions={submissions} />
       <div className="alert alert-warning">
         <AlertCircle size={20} />
         <div>
@@ -449,10 +655,15 @@ const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenP
       <div className="card">
         <h3 className="card-title"><CheckCircle2 size={18} /> Recommended Actions</h3>
         <ul className="list">
-          <li className="list-row">
-            <CheckCircle2 size={18} className="list-row-icon" />
-            <span>Confirm the cetirizine dose, then approve the reminder for your child.</span>
-          </li>
+          {medScheduleActions(profile?.medications).map((a) => (
+            <li className="list-row" key={a.key}>
+              <Pill size={18} className="list-row-icon" />
+              <span>
+                Give <strong>{a.name}{a.dose ? ` ${a.dose}` : ''}</strong>
+                {a.usage ? <> — <span className="text-muted">{a.usage}</span></> : null}
+              </span>
+            </li>
+          ))}
           <li className="list-row">
             <Clock size={18} className="list-row-icon" />
             <span>Pediatrician follow-up: Friday, June 14, 2026 at 2:30 PM.</span>
@@ -463,14 +674,16 @@ const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenP
       {role === 'parent' && (
         <div className="card">
           <h3 className="card-title"><ClipboardList size={18} /> Intake for the NP</h3>
-          <p className="card-lead">
-            {submitted
-              ? 'Your intake has been submitted for the NP to assess.'
-              : 'Add your child’s health details so the NP can assess them.'}
-          </p>
-          <button className="btn btn-ghost" onClick={onOpenProfile}>
-            <User size={16} /> {submitted ? 'Update intake' : 'Complete intake'}
-          </button>
+          {submitted ? (
+            <p className="card-lead" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+              <CheckCircle2 size={18} style={{ color: 'var(--success)' }} />
+              Submitted for NP assessment in your Profile.
+            </p>
+          ) : (
+            <p className="card-lead" style={{ margin: 0 }}>
+              Not yet submitted — submit the intake from your Profile.
+            </p>
+          )}
         </div>
       )}
     </>
@@ -484,6 +697,64 @@ const IntakeRow = ({ label, value }) => (
   </li>
 );
 
+const AssessmentCard = ({ submission: s, onAssess }) => {
+  const M = SOURCE_META[s.type] || SOURCE_META.notes;
+  const [flagging, setFlagging] = useState(false);
+  const [note, setNote] = useState('');
+
+  const sendFlag = () => {
+    onAssess && onAssess(s.id, 'flagged', note.trim() || undefined);
+    setFlagging(false);
+    setNote('');
+  };
+
+  return (
+    <div className="card card-accent">
+      <h3 className="card-title">
+        <M.Icon size={18} /> {s.title} <span className="badge badge-primary">{M.label}</span>
+      </h3>
+      <p className="card-lead">
+        {s.from ? `${s.from} · ` : ''}{s.patient ? `Patient: ${s.patient} · ` : ''}{s.date}
+      </p>
+      {s.summary?.length > 0 && (
+        <ul className="list">
+          {s.summary.map(([k, v]) => <IntakeRow key={k} label={k} value={v} />)}
+        </ul>
+      )}
+
+      {flagging ? (
+        <div style={{ marginTop: 8 }}>
+          <label className="input-label" htmlFor={`flag-${s.id}`}>Why does this need clarification?</label>
+          <textarea
+            id={`flag-${s.id}`}
+            className="textarea"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Tell the family what to clarify (e.g. confirm the dose, missing weight, illegible date)…"
+          />
+          <div className="action-row">
+            <button className="btn btn-secondary" onClick={sendFlag}>
+              <Send size={16} /> Send back for clarification
+            </button>
+            <button className="btn btn-ghost" onClick={() => { setFlagging(false); setNote(''); }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="action-row">
+          <button className="btn btn-success" onClick={() => onAssess && onAssess(s.id, 'assessed')}>
+            <CheckCircle2 size={16} /> Approve &amp; Route
+          </button>
+          <button className="btn btn-secondary" onClick={() => setFlagging(true)}>
+            Flag for clarification
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const IncomingAssessments = ({ submissions = [], onAssess }) => {
   const pending = submissions.filter((s) => s.status === 'pending');
   return (
@@ -492,57 +763,43 @@ const IncomingAssessments = ({ submissions = [], onAssess }) => {
       {pending.length === 0 ? (
         <div className="card"><p className="card-lead" style={{ margin: 0 }}>Nothing waiting — new intakes (email, notes, photo, audio) will appear here.</p></div>
       ) : (
-        pending.map((s) => {
-          const M = SOURCE_META[s.type] || SOURCE_META.notes;
-          return (
-            <div className="card card-accent" key={s.id}>
-              <h3 className="card-title">
-                <M.Icon size={18} /> {s.title} <span className="badge badge-primary">{M.label}</span>
-              </h3>
-              <p className="card-lead">
-                {s.from ? `${s.from} · ` : ''}{s.patient ? `Patient: ${s.patient} · ` : ''}{s.date}
-              </p>
-              {s.summary?.length > 0 && (
-                <ul className="list">
-                  {s.summary.map(([k, v]) => <IntakeRow key={k} label={k} value={v} />)}
-                </ul>
-              )}
-              <div className="action-row">
-                <button className="btn btn-success" onClick={() => onAssess && onAssess(s.id, 'assessed')}>
-                  <CheckCircle2 size={16} /> Approve &amp; Route
-                </button>
-                <button className="btn btn-secondary" onClick={() => onAssess && onAssess(s.id, 'flagged')}>
-                  Flag for clarification
-                </button>
-              </div>
-            </div>
-          );
-        })
+        pending.map((s) => <AssessmentCard key={s.id} submission={s} onAssess={onAssess} />)
       )}
     </>
   );
 };
 
-const MedsTab = ({ role }) => {
-  const lead =
-    role === 'child'
-      ? 'One pill with breakfast every day. It helps with itching and sneezing from allergies.'
-      : role === 'self'
-      ? '10 mg by mouth, once daily. Antihistamine for your seasonal allergies.'
-      : '5 mg by mouth, once daily with breakfast. Antihistamine for allergic rhinitis.';
+const MedsTab = ({ role, profile }) => {
+  const meds = toMedList(profile?.medications);
   return (
     <>
       <h1 className="page-title">Medications</h1>
-      <div className="card card-accent">
-        <h3 className="card-title"><Pill size={18} /> Cetirizine (Allergy)</h3>
-        <p className="card-lead">{lead}</p>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <span className="badge badge-primary">💊 Once daily</span>
-          <span className="badge badge-default">With breakfast</span>
-          <span className="badge badge-success">On track</span>
+      <p className="page-sub">
+        {meds.length
+          ? 'Your current medications, kept in sync with your Profile.'
+          : 'No medications yet — add them in your Profile and they’ll show up here.'}
+      </p>
+
+      {meds.length === 0 ? (
+        <div className="card">
+          <p className="card-lead" style={{ margin: 0 }}>Nothing to show. Open your Profile to add a medication.</p>
         </div>
-      </div>
-      {role !== 'child' && (
+      ) : (
+        meds.map((m, i) => (
+          <div className="card card-accent" key={`${m.name}-${i}`}>
+            <h3 className="card-title">
+              <Pill size={18} /> {m.name || 'Medication'}
+            </h3>
+            {m.usage && <p className="card-lead">{m.usage}</p>}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {m.dose && <span className="badge badge-primary">💊 {m.dose}</span>}
+              <span className="badge badge-success">On track</span>
+            </div>
+          </div>
+        ))
+      )}
+
+      {role !== 'child' && meds.length > 0 && (
         <div className="alert alert-info">
           <AlertCircle size={20} />
           <div>
@@ -555,7 +812,70 @@ const MedsTab = ({ role }) => {
   );
 };
 
-const FamilyTab = ({ role }) => {
+// Shared care-team chat bubble thread. mySide is 'family' or 'np'; the other
+// side's messages render left-aligned, yours right-aligned.
+const ChatThread = ({ messages = [], mySide, onSend, peerLabel }) => {
+  const [draft, setDraft] = useState('');
+  const send = () => {
+    const t = draft.trim();
+    if (!t) return;
+    onSend(mySide, t);
+    setDraft('');
+  };
+  return (
+    <div className="card card-accent">
+      <h3 className="card-title"><MessageCircle size={18} /> Chat with {peerLabel}</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto', padding: '4px 0 12px' }}>
+        {messages.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: '0.85rem', margin: 0 }}>No messages yet — say hello 👋</p>
+        ) : (
+          messages.map((m) => {
+            const mine = m.side === mySide;
+            return (
+              <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%' }}>
+                <div style={{
+                  background: mine ? 'var(--primary)' : 'var(--surface-2)',
+                  color: mine ? '#fff' : 'var(--text)',
+                  padding: '8px 12px',
+                  borderRadius: 14,
+                  borderBottomRightRadius: mine ? 4 : 14,
+                  borderBottomLeftRadius: mine ? 14 : 4,
+                }}>
+                  {m.text}
+                </div>
+                <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block', textAlign: mine ? 'right' : 'left', marginTop: 2 }}>
+                  {m.side === 'np' ? 'Care team (NP)' : 'Family'} · {m.date}
+                </span>
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          className="input"
+          style={{ flex: 1 }}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
+          placeholder="Type a message…"
+        />
+        <button className="btn btn-primary" onClick={send} aria-label="Send message"><Send size={16} /></button>
+      </div>
+    </div>
+  );
+};
+
+// NP-side chat surface (the "Messages" tab in the NP view).
+const MessagesTab = ({ messages, onSend }) => (
+  <>
+    <h1 className="page-title">Messages</h1>
+    <p className="page-sub">Chat with the family about their care. Your replies appear in their Care Team view.</p>
+    <ChatThread messages={messages} mySide="np" onSend={onSend} peerLabel="the family" />
+  </>
+);
+
+const FamilyTab = ({ role, messages, onSend }) => {
   const [approved, setApproved] = useState(false);
 
   if (role === 'self') {
@@ -581,11 +901,7 @@ const FamilyTab = ({ role }) => {
             </div>
           </div>
         </div>
-        <div className="card card-accent">
-          <h3 className="card-title">💬 Message from your care team</h3>
-          <p style={{ fontStyle: 'italic' }}>"Hi Jordan — your allergy plan looks good. Keep taking cetirizine once daily and let us know if the morning symptoms continue. See you on the 14th."</p>
-          <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: 8 }}>June 12, 2026 · 9:10 AM</p>
-        </div>
+        <ChatThread messages={messages} mySide="family" onSend={onSend} peerLabel="your care team" />
       </>
     );
   }
@@ -647,6 +963,10 @@ const FamilyTab = ({ role }) => {
             </div>
           )}
         </div>
+      )}
+
+      {role !== 'child' && (
+        <ChatThread messages={messages} mySide="family" onSend={onSend} peerLabel="your care team" />
       )}
     </>
   );
@@ -750,16 +1070,16 @@ const IntakeTab = ({ addSubmission }) => {
       {phase === 'idle' && source === 'notes' && (
         <div className="card">
           <h3 className="card-title"><ClipboardList size={18} /> Doctor notes</h3>
-          <p className="profile-section-note">Paste or type the clinician's notes.</p>
-          <textarea className="textarea" style={{ minHeight: 140 }} value={note} onChange={(e) => setNote(e.target.value)} />
+          <p className="profile-section-note">Paste or type the clinician's notes. SOAP format (Subjective / Objective / Assessment / Plan) is supported.</p>
+          <textarea className="textarea" style={{ minHeight: 140 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder={'S: …\nO: …\nA: …\nP: …'} />
           <button className="btn btn-primary btn-full" style={{ marginTop: 12 }} onClick={submit}><Send size={16} /> Extract &amp; submit to NP</button>
         </div>
       )}
 
       {phase === 'idle' && source === 'photo' && (
         <div className="card">
-          <h3 className="card-title"><Camera size={18} /> Photo / picture intake</h3>
-          <p className="profile-section-note">Snap a prescription, lab result, or handwritten note — text is read automatically (OCR).</p>
+          <h3 className="card-title"><Camera size={18} /> Photo / picture intake <span className="badge badge-warning">Demo</span></h3>
+          <p className="profile-section-note">Snap a prescription, lab result, or handwritten note — text would be read automatically (OCR). <strong>Demo:</strong> OCR is not wired up yet; a sample result is shown.</p>
           <div className="photo-drop">
             <Camera size={32} />
             {photoChosen ? <p style={{ margin: 0, color: 'var(--text)' }}>📄 prescription.jpg selected</p> : <p style={{ margin: 0 }}>No image selected</p>}
@@ -808,7 +1128,7 @@ const IntakeTab = ({ addSubmission }) => {
 /* ----------------------------- PROFILE ----------------------------- */
 
 const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
-  const [form, setForm] = useState(profile);
+  const [form, setForm] = useState(() => ({ ...profile, medications: toMedList(profile.medications), allergens: toAllergenList(profile.allergens) }));
   const [saved, setSaved] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
 
@@ -818,6 +1138,16 @@ const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
   const updateVital = (i, key, val) =>
     set('extraVitals', (form.extraVitals || []).map((v, idx) => (idx === i ? { ...v, [key]: val } : v)));
   const removeVital = (i) => set('extraVitals', (form.extraVitals || []).filter((_, idx) => idx !== i));
+
+  const meds = form.medications || [];
+  const addMed = (preset) => set('medications', [...meds, preset || { name: '', dose: '', usage: '' }]);
+  const updateMed = (i, key, val) =>
+    set('medications', meds.map((m, idx) => (idx === i ? { ...m, [key]: val } : m)));
+  const removeMed = (i) => set('medications', meds.filter((_, idx) => idx !== i));
+
+  const allergens = form.allergens || [];
+  const toggleAllergen = (name) =>
+    set('allergens', allergens.includes(name) ? allergens.filter((a) => a !== name) : [...allergens, name]);
 
   // The blue "submitted" confirmation auto-dismisses after 10 seconds.
   useEffect(() => {
@@ -834,7 +1164,7 @@ const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
 
   const handleSubmit = () => {
     onChange(form);
-    onSubmit();
+    onSubmit(form);
     setSaved(false);
     setJustSubmitted(true);
   };
@@ -890,13 +1220,80 @@ const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
         </div>
 
         <div className="card profile-card">
-          <h3 className="card-title">Health</h3>
-          <label className="input-label" htmlFor="pf-allergies">Allergies</label>
-          <textarea id="pf-allergies" className="textarea" value={form.allergies} onChange={(e) => set('allergies', e.target.value)} placeholder="Known allergies" />
-          <label className="input-label" htmlFor="pf-meds">Current medications</label>
-          <textarea id="pf-meds" className="textarea" value={form.medications} onChange={(e) => set('medications', e.target.value)} placeholder="Name, dose, frequency" />
+          <h3 className="card-title"><ShieldAlert size={18} /> Allergies</h3>
+          <p className="profile-section-note">Tap any that apply (Yes). Tap again to turn off (No).</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {COMMON_ALLERGENS.map((name) => {
+              const on = allergens.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  className={`badge ${on ? 'badge-danger' : 'badge-default'}`}
+                  style={{ cursor: 'pointer', border: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', fontSize: '0.85rem' }}
+                  aria-pressed={on}
+                  onClick={() => toggleAllergen(name)}
+                >
+                  {on ? <CheckCircle2 size={14} /> : <Plus size={14} />} {name}
+                </button>
+              );
+            })}
+          </div>
+          <label className="input-label" htmlFor="pf-allergies" style={{ marginTop: 14 }}>Other allergies / details</label>
+          <textarea id="pf-allergies" className="textarea" value={form.allergies} onChange={(e) => set('allergies', e.target.value)} placeholder="Anything not listed above, plus reactions (e.g. rash, anaphylaxis)" />
+        </div>
+
+        <div className="card profile-card">
+          <h3 className="card-title">Conditions</h3>
           <label className="input-label" htmlFor="pf-cond">Conditions / diagnoses</label>
           <textarea id="pf-cond" className="textarea" value={form.conditions} onChange={(e) => set('conditions', e.target.value)} placeholder="Ongoing conditions" />
+        </div>
+
+        <div className="card profile-card">
+          <h3 className="card-title"><Pill size={18} /> Current medications</h3>
+          <p className="profile-section-note">Add each medication with its dose and how it's taken. This list drives your Meds tab.</p>
+
+          {meds.length === 0 && (
+            <p className="text-muted" style={{ fontSize: '0.85rem' }}>No medications added yet.</p>
+          )}
+
+          {meds.map((m, i) => (
+            <div className="card" key={i} style={{ padding: 12, marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <input
+                  className="input"
+                  style={{ flex: 1, fontWeight: 600 }}
+                  value={m.name}
+                  onChange={(e) => updateMed(i, 'name', e.target.value)}
+                  placeholder="Medication name"
+                />
+                <button type="button" className="icon-btn" onClick={() => removeMed(i)} aria-label="Remove medication"><X size={18} /></button>
+              </div>
+              <label className="input-label">Dose</label>
+              <input className="input" value={m.dose} onChange={(e) => updateMed(i, 'dose', e.target.value)} placeholder="e.g. 10 mg" />
+              <label className="input-label" style={{ marginTop: 8 }}>Usage</label>
+              <input className="input" value={m.usage} onChange={(e) => updateMed(i, 'usage', e.target.value)} placeholder="e.g. Once daily with breakfast" />
+            </div>
+          ))}
+
+          <button type="button" className="btn btn-ghost" style={{ marginTop: 4 }} onClick={() => addMed()}>
+            <Plus size={16} /> Add medication
+          </button>
+
+          <p className="profile-section-note" style={{ marginTop: 14 }}>Quick add a common one:</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {COMMON_MEDS.map((preset) => (
+              <button
+                key={preset.name}
+                type="button"
+                className="btn btn-secondary"
+                style={{ flex: '0 0 auto' }}
+                onClick={() => addMed({ ...preset })}
+              >
+                <Plus size={14} /> {preset.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="card profile-card">
@@ -927,6 +1324,77 @@ const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
           <Send size={18} /> Submit for NP assessment
         </button>
       </form>
+    </div>
+  );
+};
+
+/* --------------------------- NP PROFILE --------------------------- */
+// The practitioner's own profile: identity, organization, and reference tools.
+// This is NOT a patient record — the NP reviews patient charts under Patients.
+const NPProfilePage = ({ profile, onChange, onClose }) => {
+  const [form, setForm] = useState(profile);
+  const [saved, setSaved] = useState(false);
+  const set = (k, v) => { setSaved(false); setForm((f) => ({ ...f, [k]: v })); };
+  const handleSave = (e) => { e.preventDefault(); onChange(form); setSaved(true); };
+
+  return (
+    <div className="page-container">
+      <div className="profile-head">
+        <button className="icon-btn" onClick={onClose} aria-label="Back">
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="page-title profile-title">My Profile</h1>
+      </div>
+      <p className="page-sub">Your practitioner details and quick reference tools.</p>
+
+      <form onSubmit={handleSave}>
+        <div className="card profile-card">
+          <h3 className="card-title"><Stethoscope size={18} /> Practitioner</h3>
+          <label className="input-label" htmlFor="np-name">Name</label>
+          <input id="np-name" className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Full name" />
+          <label className="input-label" htmlFor="np-cred">Credentials</label>
+          <input id="np-cred" className="input" value={form.credentials} onChange={(e) => set('credentials', e.target.value)} placeholder="e.g. MSN, FNP-BC" />
+          <label className="input-label" htmlFor="np-npi">NPI number</label>
+          <input id="np-npi" className="input" value={form.npi} onChange={(e) => set('npi', e.target.value)} placeholder="10-digit NPI" inputMode="numeric" />
+        </div>
+
+        <div className="card profile-card">
+          <h3 className="card-title"><Users size={18} /> Organization</h3>
+          <label className="input-label" htmlFor="np-org">Practice / organization</label>
+          <input id="np-org" className="input" value={form.organization} onChange={(e) => set('organization', e.target.value)} placeholder="Clinic or practice name" />
+          <label className="input-label" htmlFor="np-email">Work email</label>
+          <input id="np-email" className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="you@clinic.org" />
+          <label className="input-label" htmlFor="np-phone">Phone</label>
+          <input id="np-phone" className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(555) 555-5555" />
+        </div>
+
+        {saved && (
+          <div className="alert alert-success">
+            <CheckCircle2 size={20} />
+            <div><p className="alert-body">Saved.</p></div>
+          </div>
+        )}
+
+        <button type="submit" className="btn btn-primary btn-full">
+          <Save size={18} /> Save changes
+        </button>
+      </form>
+
+      <div className="card profile-card">
+        <h3 className="card-title"><ClipboardList size={18} /> Reference Tools</h3>
+        <p className="profile-section-note">Quick links to clinical reference material.</p>
+        <ul className="list">
+          {NP_REFERENCES.map((r) => (
+            <li className="list-row" key={r.label}>
+              <FileText size={18} className="list-row-icon" />
+              <span style={{ flex: 1 }}>
+                <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>{r.label}</a>
+                <br /><span className="text-muted" style={{ fontSize: '0.8rem' }}>{r.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 };

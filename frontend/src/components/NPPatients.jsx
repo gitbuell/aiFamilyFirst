@@ -9,6 +9,25 @@ import {
    Sample data harvested from the original prototypes/specs.
    ---------------------------------------------------------------- */
 
+// A submitted medication can be the structured { name, dose, usage } shape
+// (current) or a plain string (older saved profiles). Render either to text.
+const medLabel = (m) =>
+  typeof m === 'string'
+    ? m
+    : [m.name, m.dose].filter(Boolean).join(' ') + (m.usage ? ` — ${m.usage}` : '');
+
+const medsToText = (medications) =>
+  Array.isArray(medications)
+    ? medications.map(medLabel).filter(Boolean).join('; ')
+    : (medications || '');
+
+// Allergies = selected common-allergen chips (array) + freeform "other" string.
+const allergiesToText = (allergens, other) => {
+  const list = Array.isArray(allergens) ? [...allergens] : [];
+  if (other && String(other).trim()) list.push(String(other).trim());
+  return list.join('; ');
+};
+
 export const SAMPLE_PATIENTS = [
   {
     id: 'derrick',
@@ -122,8 +141,8 @@ export function profileToPatient(profile, submitted) {
     },
     extraVitals: (profile.extraVitals || []).filter((v) => v.label || v.value),
     text: {
-      allergies: profile.allergies,
-      medications: profile.medications,
+      allergies: allergiesToText(profile.allergens, profile.allergies),
+      medications: medsToText(profile.medications),
       conditions: profile.conditions,
       familyHistory: profile.familyHistory,
       concerns: profile.concerns,
@@ -315,7 +334,7 @@ function PatientChart({ patient: p, onBack }) {
           {/* Labs */}
           {p.labs.length > 0 && (
             <div className="card">
-              <h3 className="card-title"><FlaskConical size={18} /> Recent Labs</h3>
+              <h3 className="card-title"><FlaskConical size={18} /> Recent Labs <span className="badge badge-warning">Sample data</span></h3>
               <ul className="list">
                 {p.labs.map((l) => (
                   <li className="list-row" key={l.name}>
