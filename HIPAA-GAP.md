@@ -59,3 +59,27 @@ for project context.
 - [ ] Documented risk analysis, security policies, breach-notification process
 - [ ] Compliance professional / Privacy Officer sign-off
 - [ ] Public demo confirmed sample-data-only and isolated from the PHI deployment
+
+---
+
+## Intake media (photos / audio) — handling rules
+
+**Current state:** the demo does not capture or upload any intake media. The "Choose photo"
+button is a no-op boolean and the result is a hardcoded sample; nothing leaves the browser
+(text-only, in localStorage). So there is no PHI media exposure today. (See `FEATURE-STATUS.md`
+"Intake media flow" for the code-level detail.)
+
+**Phase 2 requirements — an uploaded intake photo/audio IS PHI. It must:**
+- [ ] Upload only over an **authenticated** session to the **gated backend (port 4003)**, never
+      from the public demo.
+- [ ] Be stored in an **encrypted, private** store — **NOT** the public `aibuell-media` bucket and
+      **NOT** the public CDN. `aibuell-media` is for public website/dashboard assets only; routing
+      PHI there would be a breach. (Media architecture: jake-system
+      `engineering-division/projects/media-and-reimage-architecture/`.)
+- [ ] Be transmitted over TLS end-to-end; access enforced by server-side RBAC (only the patient's
+      own care team / NP).
+- [ ] Be covered by a **BAA** for any processor that touches it — Google (Gemini OCR/transcription),
+      DigitalOcean (storage/hosting).
+- [ ] Be written to the audit log on every access; retained/deleted per a defined retention policy.
+- [ ] In the reimage backup, exist **only encrypted** (g14 backup mirror), never plaintext.
+- [ ] Strip/avoid unnecessary EXIF/location metadata on upload where feasible.
