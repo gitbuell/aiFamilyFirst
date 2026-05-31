@@ -99,10 +99,26 @@ body {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
-  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Site-wide credit footer — shown at the bottom of every page */
+.footer-credit {
+  display: block;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.01em;
+}
+
+.footer-note {
+  display: block;
+  text-align: center;
+  font-size: 0.75rem;
   font-style: italic;
   color: var(--text-muted);
-  text-align: center;
+  margin-top: 4px;
 }
 
 .stack {
@@ -384,6 +400,51 @@ body {
 
 .input-section {
   margin-bottom: 14px;
+}
+
+.textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 70px;
+}
+.textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+/* ---------- Profile ---------- */
+.page-container {
+  display: flex;
+  flex-direction: column;
+}
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.profile-title {
+  margin: 0;
+}
+.profile-card .input-label {
+  margin-top: 12px;
+}
+.profile-card .card-title + .input-label,
+.profile-card .input-label:first-child {
+  margin-top: 0;
+}
+.profile-section-note {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .input-wrap {

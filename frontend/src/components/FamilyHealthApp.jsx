@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Lock, Eye, EyeOff, ChevronRight, User, Stethoscope, Users,
   Moon, Sun, LogOut, Home, Pill, Mic, Upload, FileText,
-  AlertCircle, CheckCircle2, Clock, Send,
+  AlertCircle, CheckCircle2, Clock, Send, Save, ClipboardList, ArrowLeft,
 } from 'lucide-react';
 
 /* ----------------------------------------------------------------
@@ -16,6 +16,36 @@ const getInitialTheme = () => {
     return localStorage.getItem('aiff-theme') || 'light';
   } catch {
     return 'light';
+  }
+};
+
+// Patient intake profile — what the guardian fills in for the NP's assessment.
+const DEFAULT_PROFILE = {
+  patientName: 'Alex Rivera',
+  age: '8',
+  weightLbs: '48',
+  allergies: 'Pollen, dust mites',
+  medications: 'Cetirizine 5 mg, once daily',
+  conditions: 'Seasonal allergic rhinitis',
+  familyHistory: 'Mother: asthma. Father: seasonal allergies.',
+  concerns: 'Frequent morning sneezing; occasional mild wheeze after recess.',
+  notesForNP: '',
+};
+
+const getInitialProfile = () => {
+  try {
+    const s = localStorage.getItem('aiff-profile');
+    return s ? { ...DEFAULT_PROFILE, ...JSON.parse(s) } : DEFAULT_PROFILE;
+  } catch {
+    return DEFAULT_PROFILE;
+  }
+};
+
+const getInitialSubmitted = () => {
+  try {
+    return localStorage.getItem('aiff-intake-submitted') === '1';
+  } catch {
+    return false;
   }
 };
 
@@ -37,6 +67,9 @@ const FamilyHealthApp = () => {
   const [screen, setScreen] = useState('login'); // 'login' | 'app'
   const [role, setRole] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
+  const [showProfile, setShowProfile] = useState(false);
+  const [profile, setProfile] = useState(getInitialProfile);
+  const [submitted, setSubmitted] = useState(getInitialSubmitted);
 
   // login form (stub)
   const [email, setEmail] = useState('');
@@ -47,6 +80,14 @@ const FamilyHealthApp = () => {
     document.documentElement.setAttribute('data-theme', theme);
     try { localStorage.setItem('aiff-theme', theme); } catch { /* ignore */ }
   }, [theme]);
+
+  useEffect(() => {
+    try { localStorage.setItem('aiff-profile', JSON.stringify(profile)); } catch { /* ignore */ }
+  }, [profile]);
+
+  useEffect(() => {
+    try { localStorage.setItem('aiff-intake-submitted', submitted ? '1' : '0'); } catch { /* ignore */ }
+  }, [submitted]);
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
@@ -120,18 +161,21 @@ const FamilyHealthApp = () => {
               <span className="demo-btn-icon"><User size={18} /> 👧 Patient Demo (Child)</span>
               <ChevronRight size={18} className="demo-btn-chevron" />
             </button>
-            <button className="demo-btn" onClick={() => enterDemo('np')}>
-              <span className="demo-btn-icon"><Stethoscope size={18} /> 👨‍⚕️ NP Demo (Derrick)</span>
-              <ChevronRight size={18} className="demo-btn-chevron" />
-            </button>
             <button className="demo-btn" onClick={() => enterDemo('parent')}>
               <span className="demo-btn-icon"><Users size={18} /> 👨‍👩‍👧 Parent Demo (Guardian)</span>
+              <ChevronRight size={18} className="demo-btn-chevron" />
+            </button>
+            <button className="demo-btn" onClick={() => enterDemo('np')}>
+              <span className="demo-btn-icon"><Stethoscope size={18} /> 👨‍⚕️ NP Demo (Derrick)</span>
               <ChevronRight size={18} className="demo-btn-chevron" />
             </button>
           </div>
 
           <p className="auth-demo-hint">Demo credentials: demo@example.com / demo123</p>
-          <p className="auth-dedication">Translating clinical data into safe, age-appropriate family guidance.</p>
+          <div className="auth-dedication">
+            <span className="footer-credit">Hinton &amp; Macklin Farm aiConsulting</span>
+            <span className="footer-note">Translating clinical data into safe, age-appropriate family guidance.</span>
+          </div>
         </div>
       </div>
     );
@@ -146,10 +190,17 @@ const FamilyHealthApp = () => {
           <span className="app-header-greeting">{ROLES[role]?.greeting}</span>
         </div>
         <div className="app-header-actions">
+          <button
+            className="icon-btn"
+            onClick={() => setShowProfile(true)}
+            aria-label="Profile"
+          >
+            <User size={20} />
+          </button>
           <ThemeToggle />
           <button
             className="icon-btn"
-            onClick={() => { setScreen('login'); setRole(null); }}
+            onClick={() => { setScreen('login'); setRole(null); setShowProfile(false); }}
             aria-label="Sign out"
           >
             <LogOut size={20} />
@@ -158,20 +209,35 @@ const FamilyHealthApp = () => {
       </header>
 
       <main className="main-content">
-        {activeTab === 'home' && <HomeTab role={role} />}
-        {activeTab === 'meds' && <MedsTab role={role} />}
-        {activeTab === 'family' && <FamilyTab role={role} />}
-        {activeTab === 'intake' && <IntakeTab />}
+        {showProfile ? (
+          <ProfilePage
+            profile={profile}
+            onChange={setProfile}
+            submitted={submitted}
+            onSubmit={() => setSubmitted(true)}
+            onClose={() => setShowProfile(false)}
+          />
+        ) : (
+          <>
+            {activeTab === 'home' && <HomeTab role={role} profile={profile} submitted={submitted} onOpenProfile={() => setShowProfile(true)} />}
+            {activeTab === 'meds' && <MedsTab role={role} />}
+            {activeTab === 'family' && <FamilyTab role={role} />}
+            {activeTab === 'intake' && <IntakeTab />}
+          </>
+        )}
 
-        <p className="app-footer">aiFamilyFirst · demo build · sample data only</p>
+        <footer className="app-footer">
+          <span className="footer-credit">Hinton &amp; Macklin Farm aiConsulting</span>
+          <span className="footer-note">aiFamilyFirst · demo build · sample data only</span>
+        </footer>
       </main>
 
       <nav className="tab-bar">
         {TABS.map(({ key, label, Icon }) => (
           <button
             key={key}
-            className={`tab-item ${activeTab === key ? 'tab-item-active' : ''}`}
-            onClick={() => setActiveTab(key)}
+            className={`tab-item ${!showProfile && activeTab === key ? 'tab-item-active' : ''}`}
+            onClick={() => { setShowProfile(false); setActiveTab(key); }}
           >
             <Icon size={22} />
             <span className="tab-label">{label}</span>
@@ -184,7 +250,7 @@ const FamilyHealthApp = () => {
 
 /* ------------------------------ TABS ------------------------------ */
 
-const HomeTab = ({ role }) => {
+const HomeTab = ({ role, profile, submitted, onOpenProfile }) => {
   if (role === 'child') {
     return (
       <>
@@ -236,9 +302,55 @@ const HomeTab = ({ role }) => {
           </li>
         </ul>
       </div>
+
+      {role === 'np' && (
+        <div className="card card-accent">
+          <h3 className="card-title"><ClipboardList size={18} /> Patient Intake for Assessment</h3>
+          {submitted ? (
+            <>
+              <p className="card-lead">
+                Submitted by guardian — awaiting your review.{' '}
+                <span className="badge badge-warning">Awaiting NP review</span>
+              </p>
+              <ul className="list">
+                <IntakeRow label="Patient" value={`${profile.patientName}, age ${profile.age} (${profile.weightLbs} lbs)`} />
+                <IntakeRow label="Allergies" value={profile.allergies} />
+                <IntakeRow label="Medications" value={profile.medications} />
+                <IntakeRow label="Conditions" value={profile.conditions} />
+                <IntakeRow label="Family hx" value={profile.familyHistory} />
+                <IntakeRow label="Concerns" value={profile.concerns} />
+                {profile.notesForNP && <IntakeRow label="Notes" value={profile.notesForNP} />}
+              </ul>
+            </>
+          ) : (
+            <p className="card-lead">No intake has been submitted by the guardian yet.</p>
+          )}
+        </div>
+      )}
+
+      {role === 'parent' && (
+        <div className="card">
+          <h3 className="card-title"><ClipboardList size={18} /> Intake for the NP</h3>
+          <p className="card-lead">
+            {submitted
+              ? 'Your intake has been submitted for the NP to assess.'
+              : 'Add your child’s health details so the NP can assess them.'}
+          </p>
+          <button className="btn btn-ghost" onClick={onOpenProfile}>
+            <User size={16} /> {submitted ? 'Update intake' : 'Complete intake'}
+          </button>
+        </div>
+      )}
     </>
   );
 };
+
+const IntakeRow = ({ label, value }) => (
+  <li className="list-row">
+    <span style={{ minWidth: 92, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</span>
+    <span>{value || '—'}</span>
+  </li>
+);
 
 const MedsTab = ({ role }) => {
   const lead = role === 'child'
@@ -417,6 +529,97 @@ const IntakeTab = () => {
         </>
       )}
     </>
+  );
+};
+
+/* ----------------------------- PROFILE ----------------------------- */
+
+const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
+  const [form, setForm] = useState(profile);
+  const [saved, setSaved] = useState(false);
+  const [justSubmitted, setJustSubmitted] = useState(false);
+
+  const set = (k, v) => { setSaved(false); setForm((f) => ({ ...f, [k]: v })); };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    onChange(form);
+    setSaved(true);
+  };
+
+  const handleSubmit = () => {
+    onChange(form);
+    onSubmit();
+    setSaved(false);
+    setJustSubmitted(true);
+  };
+
+  return (
+    <div className="page-container">
+      <div className="profile-head">
+        <button className="icon-btn" onClick={onClose} aria-label="Back">
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="page-title profile-title">Profile</h1>
+      </div>
+      <p className="page-sub">The details here are submitted to the Nurse Practitioner for assessment. Nothing is shared until you submit.</p>
+
+      <form onSubmit={handleSave}>
+        <div className="card profile-card">
+          <h3 className="card-title">Patient</h3>
+          <label className="input-label" htmlFor="pf-name">Name</label>
+          <input id="pf-name" className="input" value={form.patientName} onChange={(e) => set('patientName', e.target.value)} placeholder="Full name" />
+          <label className="input-label" htmlFor="pf-age">Age</label>
+          <input id="pf-age" className="input" value={form.age} onChange={(e) => set('age', e.target.value)} placeholder="Age in years" inputMode="numeric" />
+          <label className="input-label" htmlFor="pf-wt">Weight (lbs)</label>
+          <input id="pf-wt" className="input" value={form.weightLbs} onChange={(e) => set('weightLbs', e.target.value)} placeholder="e.g. 48" inputMode="numeric" />
+        </div>
+
+        <div className="card profile-card">
+          <h3 className="card-title">Health</h3>
+          <label className="input-label" htmlFor="pf-allergies">Allergies</label>
+          <textarea id="pf-allergies" className="textarea" value={form.allergies} onChange={(e) => set('allergies', e.target.value)} placeholder="Known allergies" />
+          <label className="input-label" htmlFor="pf-meds">Current medications</label>
+          <textarea id="pf-meds" className="textarea" value={form.medications} onChange={(e) => set('medications', e.target.value)} placeholder="Name, dose, frequency" />
+          <label className="input-label" htmlFor="pf-cond">Conditions / diagnoses</label>
+          <textarea id="pf-cond" className="textarea" value={form.conditions} onChange={(e) => set('conditions', e.target.value)} placeholder="Ongoing conditions" />
+        </div>
+
+        <div className="card profile-card">
+          <h3 className="card-title">Family history</h3>
+          <textarea id="pf-fam" className="textarea" value={form.familyHistory} onChange={(e) => set('familyHistory', e.target.value)} placeholder="Relevant family medical history" />
+        </div>
+
+        <div className="card profile-card">
+          <h3 className="card-title">For the NP</h3>
+          <p className="profile-section-note">Reason for assessment and anything you want the NP to know.</p>
+          <label className="input-label" htmlFor="pf-concerns">Current concerns</label>
+          <textarea id="pf-concerns" className="textarea" value={form.concerns} onChange={(e) => set('concerns', e.target.value)} placeholder="What's prompting this assessment?" />
+          <label className="input-label" htmlFor="pf-notes">Notes</label>
+          <textarea id="pf-notes" className="textarea" value={form.notesForNP} onChange={(e) => set('notesForNP', e.target.value)} placeholder="Anything else for the NP" />
+        </div>
+
+        {saved && (
+          <div className="alert alert-success">
+            <CheckCircle2 size={20} />
+            <div><p className="alert-body">Saved.</p></div>
+          </div>
+        )}
+        {(submitted || justSubmitted) && (
+          <div className="alert alert-info">
+            <ClipboardList size={20} />
+            <div><p className="alert-body">Submitted for NP assessment — it now appears in the NP's view.</p></div>
+          </div>
+        )}
+
+        <button type="submit" className="btn btn-primary btn-full">
+          <Save size={18} /> Save changes
+        </button>
+        <button type="button" className="btn btn-ghost btn-full" style={{ marginTop: 10 }} onClick={handleSubmit}>
+          <Send size={18} /> Submit for NP assessment
+        </button>
+      </form>
+    </div>
   );
 };
 
