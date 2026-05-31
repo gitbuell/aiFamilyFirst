@@ -3,7 +3,9 @@ import {
   Lock, Eye, EyeOff, ChevronRight, User, Stethoscope, Users,
   Moon, Sun, LogOut, Home, Pill, Mic, Upload, FileText,
   AlertCircle, CheckCircle2, Clock, Send, Save, ClipboardList, ArrowLeft,
+  Activity, Mail, Camera, Plus, X,
 } from 'lucide-react';
+import { PatientsTab, profileToPatient } from './NPPatients.jsx';
 
 /* ----------------------------------------------------------------
    aiFamilyFirst — restyled to match the aiSafePlate design system:
@@ -21,14 +23,18 @@ const getInitialTheme = () => {
 
 // Patient intake profile — what the guardian fills in for the NP's assessment.
 const DEFAULT_PROFILE = {
-  patientName: 'Alex Rivera',
-  age: '8',
-  weightLbs: '48',
-  allergies: 'Pollen, dust mites',
-  medications: 'Cetirizine 5 mg, once daily',
+  patientName: 'Jordan Lee',
+  age: '34',
+  weightLbs: '170',
+  heightIn: '69',
+  bp: '118/76',
+  hr: '72',
+  extraVitals: [{ label: 'Temperature', value: '98.6°F' }],
+  allergies: 'Penicillin (rash); pollen',
+  medications: 'Cetirizine 10 mg, once daily',
   conditions: 'Seasonal allergic rhinitis',
-  familyHistory: 'Mother: asthma. Father: seasonal allergies.',
-  concerns: 'Frequent morning sneezing; occasional mild wheeze after recess.',
+  familyHistory: 'Mother: asthma. Father: hypertension.',
+  concerns: 'Frequent morning congestion; occasional mild wheeze.',
   notesForNP: '',
 };
 
@@ -49,18 +55,56 @@ const getInitialSubmitted = () => {
   }
 };
 
+// Intake submissions (any source) queued for NP assessment. Seeded with a
+// sample doctor email so the NP view demonstrates the assessment queue.
+const SEED_SUBMISSIONS = [
+  {
+    id: 'seed-email-1',
+    type: 'email',
+    title: 'Visit summary — Alex Rivera',
+    from: 'Dr. Johnson <jjohnson@clinic.org>',
+    patient: 'Alex Rivera',
+    date: 'Today',
+    status: 'pending',
+    summary: [
+      ['Diagnosis', 'Acute otitis media (right ear)'],
+      ['Prescribed', 'Amoxicillin 500 mg TID × 10 days'],
+      ['Follow-up', '10 days if not improving'],
+      ['Flag', 'Dosing: verify (std ≈ 540 mg/dose)'],
+    ],
+  },
+];
+
+const getInitialSubmissions = () => {
+  try {
+    const s = localStorage.getItem('aiff-submissions');
+    return s ? JSON.parse(s) : SEED_SUBMISSIONS;
+  } catch {
+    return SEED_SUBMISSIONS;
+  }
+};
+
 const ROLES = {
+  self: { greeting: 'Signed in as Jordan Lee (age 34)', emoji: '🧑' },
+  np: { greeting: 'Signed in as MalToy (NP)', emoji: '👨‍⚕️' },
   child: { greeting: 'Signed in as Alex (age 8)', emoji: '👧' },
-  np: { greeting: 'Signed in as Derrick (NP)', emoji: '👨‍⚕️' },
   parent: { greeting: 'Signed in as Sarah (Parent)', emoji: '👨‍👩‍👧' },
 };
 
-const TABS = [
+const DEFAULT_TABS = [
   { key: 'home', label: 'Home', Icon: Home },
   { key: 'meds', label: 'Meds', Icon: Pill },
   { key: 'family', label: 'Family', Icon: Users },
   { key: 'intake', label: 'Intake', Icon: Mic },
 ];
+
+const NP_TABS = [
+  { key: 'home', label: 'Home', Icon: Home },
+  { key: 'patients', label: 'Patients', Icon: Users },
+  { key: 'intake', label: 'Intake', Icon: Mic },
+];
+
+const tabsForRole = (role) => (role === 'np' ? NP_TABS : DEFAULT_TABS);
 
 const FamilyHealthApp = () => {
   const [theme, setTheme] = useState(getInitialTheme);
@@ -70,6 +114,7 @@ const FamilyHealthApp = () => {
   const [showProfile, setShowProfile] = useState(false);
   const [profile, setProfile] = useState(getInitialProfile);
   const [submitted, setSubmitted] = useState(getInitialSubmitted);
+  const [submissions, setSubmissions] = useState(getInitialSubmissions);
 
   // login form (stub)
   const [email, setEmail] = useState('');
@@ -88,6 +133,15 @@ const FamilyHealthApp = () => {
   useEffect(() => {
     try { localStorage.setItem('aiff-intake-submitted', submitted ? '1' : '0'); } catch { /* ignore */ }
   }, [submitted]);
+
+  useEffect(() => {
+    try { localStorage.setItem('aiff-submissions', JSON.stringify(submissions)); } catch { /* ignore */ }
+  }, [submissions]);
+
+  const addSubmission = (sub) =>
+    setSubmissions((list) => [{ id: `sub-${Date.now()}`, status: 'pending', date: 'Just now', ...sub }, ...list]);
+  const assessSubmission = (id, status) =>
+    setSubmissions((list) => list.map((s) => (s.id === id ? { ...s, status } : s)));
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
@@ -157,16 +211,12 @@ const FamilyHealthApp = () => {
           <div className="auth-divider"><span>OR TRY DEMO</span></div>
 
           <div className="demo-list">
-            <button className="demo-btn" onClick={() => enterDemo('child')}>
-              <span className="demo-btn-icon"><User size={18} /> 👧 Patient Demo (Child)</span>
-              <ChevronRight size={18} className="demo-btn-chevron" />
-            </button>
-            <button className="demo-btn" onClick={() => enterDemo('parent')}>
-              <span className="demo-btn-icon"><Users size={18} /> 👨‍👩‍👧 Parent Demo (Guardian)</span>
+            <button className="demo-btn" onClick={() => enterDemo('self')}>
+              <span className="demo-btn-icon"><User size={18} /> 🧑 Self-Patient Demo (Adult)</span>
               <ChevronRight size={18} className="demo-btn-chevron" />
             </button>
             <button className="demo-btn" onClick={() => enterDemo('np')}>
-              <span className="demo-btn-icon"><Stethoscope size={18} /> 👨‍⚕️ NP Demo (Derrick)</span>
+              <span className="demo-btn-icon"><Stethoscope size={18} /> 👨‍⚕️ NP Demo (MalToy)</span>
               <ChevronRight size={18} className="demo-btn-chevron" />
             </button>
           </div>
@@ -219,10 +269,11 @@ const FamilyHealthApp = () => {
           />
         ) : (
           <>
-            {activeTab === 'home' && <HomeTab role={role} profile={profile} submitted={submitted} onOpenProfile={() => setShowProfile(true)} />}
+            {activeTab === 'home' && <HomeTab role={role} profile={profile} submitted={submitted} submissions={submissions} onAssess={assessSubmission} onOpenProfile={() => setShowProfile(true)} onNavigate={setActiveTab} />}
             {activeTab === 'meds' && <MedsTab role={role} />}
             {activeTab === 'family' && <FamilyTab role={role} />}
-            {activeTab === 'intake' && <IntakeTab />}
+            {activeTab === 'patients' && <PatientsTab live={profileToPatient(profile, submitted)} />}
+            {activeTab === 'intake' && <IntakeTab addSubmission={addSubmission} />}
           </>
         )}
 
@@ -233,7 +284,7 @@ const FamilyHealthApp = () => {
       </main>
 
       <nav className="tab-bar">
-        {TABS.map(({ key, label, Icon }) => (
+        {tabsForRole(role).map(({ key, label, Icon }) => (
           <button
             key={key}
             className={`tab-item ${!showProfile && activeTab === key ? 'tab-item-active' : ''}`}
@@ -250,7 +301,14 @@ const FamilyHealthApp = () => {
 
 /* ------------------------------ TABS ------------------------------ */
 
-const HomeTab = ({ role, profile, submitted, onOpenProfile }) => {
+const SOURCE_META = {
+  audio: { label: 'Audio', Icon: Mic },
+  email: { label: 'Email', Icon: Mail },
+  notes: { label: 'Notes', Icon: ClipboardList },
+  photo: { label: 'Photo', Icon: Camera },
+};
+
+const HomeTab = ({ role, profile, submitted, submissions = [], onAssess, onOpenProfile, onNavigate }) => {
   if (role === 'child') {
     return (
       <>
@@ -274,6 +332,105 @@ const HomeTab = ({ role, profile, submitted, onOpenProfile }) => {
       </>
     );
   }
+
+  if (role === 'self') {
+    return (
+      <>
+        <h1 className="page-title">Home</h1>
+        <div className="hero-card">
+          <h2 className="hero-title">Your Health Summary</h2>
+          <p className="hero-text">Your latest AI-reviewed update, in plain language. You're in control of what's shared with your care team.</p>
+          <p className="hero-meta">Last reviewed June 12, 2026</p>
+        </div>
+        <div className="alert alert-info">
+          <AlertCircle size={20} />
+          <div>
+            <p className="alert-title">Medication review</p>
+            <p className="alert-body">Cetirizine 10 mg once daily for seasonal allergies. No interactions flagged with your current medications.</p>
+          </div>
+        </div>
+        <div className="card">
+          <h3 className="card-title"><Clock size={18} /> Next Appointment</h3>
+          <p className="card-lead">Dr. Patel (Allergy &amp; Immunology)</p>
+          <p className="text-muted">📍 Aibuell Health Clinic<br />📆 Fri, June 14, 2026 · 2:30 PM<br />⏱️ Check in 15 min early</p>
+        </div>
+        <div className="card">
+          <h3 className="card-title"><CheckCircle2 size={18} /> Recommended Actions</h3>
+          <ul className="list">
+            <li className="list-row">
+              <CheckCircle2 size={18} className="list-row-icon" />
+              <span>Refill cetirizine before your next dose runs out.</span>
+            </li>
+            <li className="list-row">
+              <Clock size={18} className="list-row-icon" />
+              <span>Allergy follow-up: Friday, June 14, 2026 at 2:30 PM.</span>
+            </li>
+          </ul>
+        </div>
+        <div className="card card-accent">
+          <h3 className="card-title"><ClipboardList size={18} /> Intake for the NP</h3>
+          <p className="card-lead">
+            {submitted
+              ? 'Your intake has been submitted for the NP to assess.'
+              : 'Add your health details so the NP can assess them.'}
+          </p>
+          <button className="btn btn-ghost" onClick={onOpenProfile}>
+            <User size={16} /> {submitted ? 'Update my intake' : 'Complete my intake'}
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  if (role === 'np') {
+    const activePatients = submitted ? 3 : 2;
+    return (
+      <>
+        <h1 className="page-title">Dashboard</h1>
+        <div className="stat-grid">
+          <div className="stat-item">
+            <Users size={22} className="stat-icon" />
+            <div><p className="stat-value">{activePatients}</p><p className="stat-label">Active patients</p></div>
+          </div>
+          <div className="stat-item">
+            <AlertCircle size={22} className="stat-icon" />
+            <div><p className="stat-value">2</p><p className="stat-label">Pending approvals</p></div>
+          </div>
+        </div>
+
+        <p className="section-label">Pending Approvals</p>
+        <div className="alert alert-warning">
+          <AlertCircle size={20} />
+          <div>
+            <p className="alert-title">Alex · Cetirizine 10 mg refill <span className="badge badge-warning">Minor</span></p>
+            <p className="alert-body">Dose 0.2 mg/kg — within range. No conflicts. Confirm continuation vs. change.</p>
+            <div className="action-row">
+              <button className="btn btn-success" onClick={() => alert('Approved. (Demo)')}><CheckCircle2 size={16} /> Approve</button>
+              <button className="btn btn-secondary" onClick={() => alert('Opening details… (Demo)')}>Review details</button>
+            </div>
+          </div>
+        </div>
+        <div className="alert alert-danger">
+          <AlertCircle size={20} />
+          <div>
+            <p className="alert-title">MalToy · Ibuprofen 400 mg <span className="badge badge-danger">Critical</span></p>
+            <p className="alert-body">NSAID + Lisinopril (ACE-I) → hyperkalemia / acute kidney injury risk; also additive GI-bleed with aspirin. Recommend acetaminophen first-line.</p>
+            <div className="action-row">
+              <button className="btn btn-secondary" onClick={() => alert('Rejected — prescriber notified. (Demo)')}>Reject — call prescriber</button>
+              <button className="btn btn-success" onClick={() => alert('Approved with conditions. (Demo)')}>Approve w/ conditions</button>
+            </div>
+          </div>
+        </div>
+
+        <IncomingAssessments submissions={submissions} onAssess={onAssess} />
+
+        <button className="btn btn-ghost btn-full" onClick={() => onNavigate && onNavigate('patients')}>
+          <Users size={16} /> View all patients
+        </button>
+      </>
+    );
+  }
+
   return (
     <>
       <h1 className="page-title">Home</h1>
@@ -303,31 +460,6 @@ const HomeTab = ({ role, profile, submitted, onOpenProfile }) => {
         </ul>
       </div>
 
-      {role === 'np' && (
-        <div className="card card-accent">
-          <h3 className="card-title"><ClipboardList size={18} /> Patient Intake for Assessment</h3>
-          {submitted ? (
-            <>
-              <p className="card-lead">
-                Submitted by guardian — awaiting your review.{' '}
-                <span className="badge badge-warning">Awaiting NP review</span>
-              </p>
-              <ul className="list">
-                <IntakeRow label="Patient" value={`${profile.patientName}, age ${profile.age} (${profile.weightLbs} lbs)`} />
-                <IntakeRow label="Allergies" value={profile.allergies} />
-                <IntakeRow label="Medications" value={profile.medications} />
-                <IntakeRow label="Conditions" value={profile.conditions} />
-                <IntakeRow label="Family hx" value={profile.familyHistory} />
-                <IntakeRow label="Concerns" value={profile.concerns} />
-                {profile.notesForNP && <IntakeRow label="Notes" value={profile.notesForNP} />}
-              </ul>
-            </>
-          ) : (
-            <p className="card-lead">No intake has been submitted by the guardian yet.</p>
-          )}
-        </div>
-      )}
-
       {role === 'parent' && (
         <div className="card">
           <h3 className="card-title"><ClipboardList size={18} /> Intake for the NP</h3>
@@ -352,10 +484,52 @@ const IntakeRow = ({ label, value }) => (
   </li>
 );
 
+const IncomingAssessments = ({ submissions = [], onAssess }) => {
+  const pending = submissions.filter((s) => s.status === 'pending');
+  return (
+    <>
+      <p className="section-label">Incoming for Assessment{pending.length ? ` (${pending.length})` : ''}</p>
+      {pending.length === 0 ? (
+        <div className="card"><p className="card-lead" style={{ margin: 0 }}>Nothing waiting — new intakes (email, notes, photo, audio) will appear here.</p></div>
+      ) : (
+        pending.map((s) => {
+          const M = SOURCE_META[s.type] || SOURCE_META.notes;
+          return (
+            <div className="card card-accent" key={s.id}>
+              <h3 className="card-title">
+                <M.Icon size={18} /> {s.title} <span className="badge badge-primary">{M.label}</span>
+              </h3>
+              <p className="card-lead">
+                {s.from ? `${s.from} · ` : ''}{s.patient ? `Patient: ${s.patient} · ` : ''}{s.date}
+              </p>
+              {s.summary?.length > 0 && (
+                <ul className="list">
+                  {s.summary.map(([k, v]) => <IntakeRow key={k} label={k} value={v} />)}
+                </ul>
+              )}
+              <div className="action-row">
+                <button className="btn btn-success" onClick={() => onAssess && onAssess(s.id, 'assessed')}>
+                  <CheckCircle2 size={16} /> Approve &amp; Route
+                </button>
+                <button className="btn btn-secondary" onClick={() => onAssess && onAssess(s.id, 'flagged')}>
+                  Flag for clarification
+                </button>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </>
+  );
+};
+
 const MedsTab = ({ role }) => {
-  const lead = role === 'child'
-    ? 'One pill with breakfast every day. It helps with itching and sneezing from allergies.'
-    : '5 mg by mouth, once daily with breakfast. Antihistamine for allergic rhinitis.';
+  const lead =
+    role === 'child'
+      ? 'One pill with breakfast every day. It helps with itching and sneezing from allergies.'
+      : role === 'self'
+      ? '10 mg by mouth, once daily. Antihistamine for your seasonal allergies.'
+      : '5 mg by mouth, once daily with breakfast. Antihistamine for allergic rhinitis.';
   return (
     <>
       <h1 className="page-title">Medications</h1>
@@ -383,6 +557,39 @@ const MedsTab = ({ role }) => {
 
 const FamilyTab = ({ role }) => {
   const [approved, setApproved] = useState(false);
+
+  if (role === 'self') {
+    return (
+      <>
+        <h1 className="page-title">Care Team</h1>
+        <div className="card">
+          <h3 className="card-title"><Users size={18} /> Your Care Team</h3>
+          <div>
+            <div className="member-row">
+              <span className="member-avatar">🩺</span>
+              <div>
+                <div className="member-name">MalToy</div>
+                <div className="member-sub">Nurse Practitioner</div>
+              </div>
+            </div>
+            <div className="member-row">
+              <span className="member-avatar">👩‍⚕️</span>
+              <div>
+                <div className="member-name">Dr. Patel</div>
+                <div className="member-sub">Allergy &amp; Immunology</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="card card-accent">
+          <h3 className="card-title">💬 Message from your care team</h3>
+          <p style={{ fontStyle: 'italic' }}>"Hi Jordan — your allergy plan looks good. Keep taking cetirizine once daily and let us know if the morning symptoms continue. See you on the 14th."</p>
+          <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: 8 }}>June 12, 2026 · 9:10 AM</p>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <h1 className="page-title">Family</h1>
@@ -406,7 +613,7 @@ const FamilyTab = ({ role }) => {
           <div className="member-row">
             <span className="member-avatar">🩺</span>
             <div>
-              <div className="member-name">Derrick</div>
+              <div className="member-name">MalToy</div>
               <div className="member-sub">Nurse Practitioner</div>
             </div>
           </div>
@@ -445,55 +652,124 @@ const FamilyTab = ({ role }) => {
   );
 };
 
-const SAMPLE_EXTRACTION = {
-  source: 'Dr. Johnson — well-child visit',
-  fields: [
-    ['Diagnosis', 'Seasonal allergic rhinitis'],
-    ['Medication', 'Cetirizine 5 mg, once daily'],
-    ['Follow-up', 'June 14, 2026 · 2:30 PM'],
-    ['Flags', '1 dosing item for parent review'],
-  ],
+const INTAKE_SOURCES = [
+  { key: 'audio', label: 'Audio', Icon: Mic },
+  { key: 'email', label: 'Email', Icon: Mail },
+  { key: 'notes', label: 'Doctor Notes', Icon: ClipboardList },
+  { key: 'photo', label: 'Photo', Icon: Camera },
+];
+
+const SAMPLE_EMAIL = {
+  from: 'Dr. Johnson <jjohnson@clinic.org>',
+  subject: 'Visit summary — Alex Rivera',
+  body: 'Saw Alex today for right ear pain. Exam consistent with acute otitis media. Started amoxicillin 500 mg TID for 10 days. RTC in 10 days if not improving.',
 };
 
-const IntakeTab = () => {
-  const [state, setState] = useState('idle'); // idle | recording | processing | done
+const SAMPLE_NOTE = 'S: Morning congestion, mild wheeze x2 wks.\nO: Lungs clear, no distress.\nA: Seasonal allergic rhinitis, well controlled.\nP: Continue cetirizine 10 mg daily; saline rinse; f/u PRN.';
 
-  const stopAndProcess = () => {
-    setState('processing');
-    setTimeout(() => setState('done'), 1500);
+// Demo "extraction" per source — what the Family Architect pulls out.
+const extractFor = (source, email) => {
+  switch (source) {
+    case 'audio':
+      return { title: 'Audio — visit recording', summary: [['Diagnosis', 'Seasonal allergic rhinitis'], ['Medication', 'Cetirizine 10 mg daily'], ['Follow-up', 'June 14, 2026'], ['Flags', 'None']] };
+    case 'email':
+      return { title: email.subject || 'Doctor email', from: email.from, summary: [['Diagnosis', 'Acute otitis media (R ear)'], ['Prescribed', 'Amoxicillin 500 mg TID × 10 days'], ['Follow-up', '10 days if not improving'], ['Flag', 'Dosing: verify (std ≈ 540 mg/dose)']] };
+    case 'notes':
+      return { title: 'Doctor notes', summary: [['Assessment', 'Allergic rhinitis, well controlled'], ['Plan', 'Continue cetirizine; saline rinse'], ['Medication', 'Cetirizine 10 mg daily'], ['Follow-up', 'PRN']] };
+    case 'photo':
+    default:
+      return { title: 'Photo — handwritten Rx', summary: [['Medication', 'Amoxicillin'], ['Dose', '500 mg'], ['Sig', '1 cap TID × 10 days'], ['Prescriber', 'Dr. Johnson'], ['Confidence', 'Low — verify (OCR)']] };
+  }
+};
+
+const IntakeTab = ({ addSubmission }) => {
+  const [source, setSource] = useState('audio');
+  const [phase, setPhase] = useState('idle'); // idle | recording | processing | done
+  const [email, setEmail] = useState(SAMPLE_EMAIL);
+  const [note, setNote] = useState(SAMPLE_NOTE);
+  const [photoChosen, setPhotoChosen] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const reset = () => { setPhase('idle'); setResult(null); setPhotoChosen(false); };
+  const pick = (key) => { setSource(key); reset(); };
+
+  const submit = () => {
+    const ex = extractFor(source, email);
+    addSubmission && addSubmission({ type: source, title: ex.title, from: ex.from || null, summary: ex.summary });
+    setResult(ex);
+    setPhase('processing');
+    setTimeout(() => setPhase('done'), 1300);
   };
 
   return (
     <>
-      <h1 className="page-title">Audio Intake</h1>
-      <p className="page-sub">Record or upload a visit. The Family Architect extracts the details for review.</p>
+      <h1 className="page-title">Intake</h1>
+      <p className="page-sub">Add a visit from any source. The Family Architect extracts the details and sends them to the NP for assessment.</p>
 
-      {state === 'idle' && (
+      <div className="seg">
+        {INTAKE_SOURCES.map(({ key, label, Icon }) => (
+          <button key={key} className={`seg-btn ${source === key ? 'seg-btn-active' : ''}`} onClick={() => pick(key)}>
+            <Icon size={18} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {phase === 'idle' && source === 'audio' && (
         <div className="card">
           <div className="intake-recorder">
-            <button className="mic-btn" onClick={() => setState('recording')} aria-label="Start recording">
-              <Mic size={36} />
-            </button>
+            <button className="mic-btn" onClick={() => setPhase('recording')} aria-label="Start recording"><Mic size={36} /></button>
             <p className="text-muted">Tap to record a visit summary</p>
           </div>
-          <button className="btn btn-secondary btn-full" onClick={stopAndProcess}>
-            <Upload size={16} /> Upload audio file
-          </button>
+          <button className="btn btn-secondary btn-full" onClick={submit}><Upload size={16} /> Upload audio file</button>
         </div>
       )}
 
-      {state === 'recording' && (
+      {phase === 'recording' && (
         <div className="card">
           <div className="intake-recorder">
-            <button className="mic-btn mic-btn-recording" onClick={stopAndProcess} aria-label="Stop recording">
-              <Mic size={36} />
-            </button>
+            <button className="mic-btn mic-btn-recording" onClick={submit} aria-label="Stop recording"><Mic size={36} /></button>
             <p style={{ color: 'var(--danger)', fontWeight: 600 }}>Recording… tap to stop</p>
           </div>
         </div>
       )}
 
-      {state === 'processing' && (
+      {phase === 'idle' && source === 'email' && (
+        <div className="card">
+          <h3 className="card-title"><Mail size={18} /> Doctor email</h3>
+          <label className="input-label">From</label>
+          <input className="input" value={email.from} onChange={(e) => setEmail({ ...email, from: e.target.value })} />
+          <label className="input-label" style={{ marginTop: 12 }}>Subject</label>
+          <input className="input" value={email.subject} onChange={(e) => setEmail({ ...email, subject: e.target.value })} />
+          <label className="input-label" style={{ marginTop: 12 }}>Body</label>
+          <textarea className="textarea" value={email.body} onChange={(e) => setEmail({ ...email, body: e.target.value })} />
+          <button className="btn btn-primary btn-full" style={{ marginTop: 12 }} onClick={submit}><Send size={16} /> Extract &amp; submit to NP</button>
+        </div>
+      )}
+
+      {phase === 'idle' && source === 'notes' && (
+        <div className="card">
+          <h3 className="card-title"><ClipboardList size={18} /> Doctor notes</h3>
+          <p className="profile-section-note">Paste or type the clinician's notes.</p>
+          <textarea className="textarea" style={{ minHeight: 140 }} value={note} onChange={(e) => setNote(e.target.value)} />
+          <button className="btn btn-primary btn-full" style={{ marginTop: 12 }} onClick={submit}><Send size={16} /> Extract &amp; submit to NP</button>
+        </div>
+      )}
+
+      {phase === 'idle' && source === 'photo' && (
+        <div className="card">
+          <h3 className="card-title"><Camera size={18} /> Photo / picture intake</h3>
+          <p className="profile-section-note">Snap a prescription, lab result, or handwritten note — text is read automatically (OCR).</p>
+          <div className="photo-drop">
+            <Camera size={32} />
+            {photoChosen ? <p style={{ margin: 0, color: 'var(--text)' }}>📄 prescription.jpg selected</p> : <p style={{ margin: 0 }}>No image selected</p>}
+            <button className="btn btn-secondary" onClick={() => setPhotoChosen(true)}><Upload size={16} /> Choose photo</button>
+          </div>
+          <button className="btn btn-primary btn-full" style={{ marginTop: 12 }} disabled={!photoChosen} onClick={submit}><Send size={16} /> Extract &amp; submit to NP</button>
+        </div>
+      )}
+
+      {phase === 'processing' && (
         <div className="card">
           <div className="empty-state">
             <div className="loading-spinner" />
@@ -502,20 +778,19 @@ const IntakeTab = () => {
         </div>
       )}
 
-      {state === 'done' && (
+      {phase === 'done' && result && (
         <>
           <div className="alert alert-success">
             <CheckCircle2 size={20} />
             <div>
-              <p className="alert-title">Extraction complete</p>
-              <p className="alert-body">Structured data ready for synthesis &amp; parent review.</p>
+              <p className="alert-title">Submitted to the NP for assessment</p>
+              <p className="alert-body">Extraction complete — it now appears in the NP's assessment queue.</p>
             </div>
           </div>
           <div className="card card-accent">
-            <h3 className="card-title"><FileText size={18} /> Extracted Summary</h3>
-            <p className="card-lead">{SAMPLE_EXTRACTION.source}</p>
+            <h3 className="card-title"><FileText size={18} /> {result.title}</h3>
             <ul className="list">
-              {SAMPLE_EXTRACTION.fields.map(([k, v]) => (
+              {result.summary.map(([k, v]) => (
                 <li className="list-row" key={k}>
                   <span style={{ minWidth: 96, color: 'var(--text-muted)', fontWeight: 600 }}>{k}</span>
                   <span>{v}</span>
@@ -523,9 +798,7 @@ const IntakeTab = () => {
               ))}
             </ul>
           </div>
-          <button className="btn btn-ghost btn-full" onClick={() => setState('idle')}>
-            New intake
-          </button>
+          <button className="btn btn-ghost btn-full" onClick={reset}>New intake</button>
         </>
       )}
     </>
@@ -540,6 +813,18 @@ const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
   const [justSubmitted, setJustSubmitted] = useState(false);
 
   const set = (k, v) => { setSaved(false); setForm((f) => ({ ...f, [k]: v })); };
+
+  const addVital = () => set('extraVitals', [...(form.extraVitals || []), { label: '', value: '' }]);
+  const updateVital = (i, key, val) =>
+    set('extraVitals', (form.extraVitals || []).map((v, idx) => (idx === i ? { ...v, [key]: val } : v)));
+  const removeVital = (i) => set('extraVitals', (form.extraVitals || []).filter((_, idx) => idx !== i));
+
+  // The blue "submitted" confirmation auto-dismisses after 10 seconds.
+  useEffect(() => {
+    if (!justSubmitted) return undefined;
+    const t = setTimeout(() => setJustSubmitted(false), 10000);
+    return () => clearTimeout(t);
+  }, [justSubmitted]);
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -564,6 +849,13 @@ const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
       </div>
       <p className="page-sub">The details here are submitted to the Nurse Practitioner for assessment. Nothing is shared until you submit.</p>
 
+      {justSubmitted && (
+        <div className="alert alert-info">
+          <ClipboardList size={20} />
+          <div><p className="alert-body">Submitted for NP assessment — it now appears in the NP's view.</p></div>
+        </div>
+      )}
+
       <form onSubmit={handleSave}>
         <div className="card profile-card">
           <h3 className="card-title">Patient</h3>
@@ -573,6 +865,28 @@ const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
           <input id="pf-age" className="input" value={form.age} onChange={(e) => set('age', e.target.value)} placeholder="Age in years" inputMode="numeric" />
           <label className="input-label" htmlFor="pf-wt">Weight (lbs)</label>
           <input id="pf-wt" className="input" value={form.weightLbs} onChange={(e) => set('weightLbs', e.target.value)} placeholder="e.g. 48" inputMode="numeric" />
+          <label className="input-label" htmlFor="pf-ht">Height (in)</label>
+          <input id="pf-ht" className="input" value={form.heightIn} onChange={(e) => set('heightIn', e.target.value)} placeholder="e.g. 50" inputMode="numeric" />
+        </div>
+
+        <div className="card profile-card">
+          <h3 className="card-title">Vitals</h3>
+          <p className="profile-section-note">Most recent readings, if you have them.</p>
+          <label className="input-label" htmlFor="pf-bp">Blood pressure</label>
+          <input id="pf-bp" className="input" value={form.bp} onChange={(e) => set('bp', e.target.value)} placeholder="e.g. 110/70" />
+          <label className="input-label" htmlFor="pf-hr">Heart rate (bpm)</label>
+          <input id="pf-hr" className="input" value={form.hr} onChange={(e) => set('hr', e.target.value)} placeholder="e.g. 88" inputMode="numeric" />
+
+          {(form.extraVitals || []).map((v, i) => (
+            <div className="vital-row" key={i}>
+              <input className="input" value={v.label} onChange={(e) => updateVital(i, 'label', e.target.value)} placeholder="Vital (e.g. O₂ sat)" />
+              <input className="input" value={v.value} onChange={(e) => updateVital(i, 'value', e.target.value)} placeholder="Value" />
+              <button type="button" className="icon-btn" onClick={() => removeVital(i)} aria-label="Remove vital"><X size={18} /></button>
+            </div>
+          ))}
+          <button type="button" className="btn btn-ghost" style={{ marginTop: 10 }} onClick={addVital}>
+            <Plus size={16} /> Add vital
+          </button>
         </div>
 
         <div className="card profile-card">
@@ -605,17 +919,11 @@ const ProfilePage = ({ profile, onChange, submitted, onSubmit, onClose }) => {
             <div><p className="alert-body">Saved.</p></div>
           </div>
         )}
-        {(submitted || justSubmitted) && (
-          <div className="alert alert-info">
-            <ClipboardList size={20} />
-            <div><p className="alert-body">Submitted for NP assessment — it now appears in the NP's view.</p></div>
-          </div>
-        )}
 
         <button type="submit" className="btn btn-primary btn-full">
           <Save size={18} /> Save changes
         </button>
-        <button type="button" className="btn btn-ghost btn-full" style={{ marginTop: 10 }} onClick={handleSubmit}>
+        <button type="button" className="btn btn-success btn-full" style={{ marginTop: 10 }} onClick={handleSubmit}>
           <Send size={18} /> Submit for NP assessment
         </button>
       </form>

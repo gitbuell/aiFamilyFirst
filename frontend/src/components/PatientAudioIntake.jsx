@@ -428,8 +428,8 @@ const PatientAudioIntake = ({ darkMode = false }) => {
               <ol className={`space-y-2 text-sm ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 <li>1️⃣ You confirm and submit the recording</li>
                 <li>2️⃣ Our AI transcribes the audio to text (usually within 1 minute)</li>
-                <li>3️⃣ Transcription is reviewed and sent to your NP (Derrick)</li>
-                <li>4️⃣ Derrick reviews, extracts key information, and creates a clinical summary</li>
+                <li>3️⃣ Transcription is reviewed and sent to your NP (MalToy)</li>
+                <li>4️⃣ MalToy reviews, extracts key information, and creates a clinical summary</li>
                 <li>5️⃣ You'll receive notifications about any new medications or instructions</li>
               </ol>
             </div>
@@ -498,7 +498,7 @@ const PatientAudioIntake = ({ darkMode = false }) => {
                 : 'bg-purple-50'
             }`}>
               <h3 className={`font-bold mb-3 ${darkMode ? 'text-purple-200' : 'text-purple-900'}`}>
-                👨‍⚕️ What Derrick (Your NP) Will Do:
+                👨‍⚕️ What MalToy (Your NP) Will Do:
               </h3>
               <ul className={`space-y-2 text-sm ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 <li>✓ Review the transcription for accuracy</li>
@@ -550,7 +550,7 @@ const PatientAudioIntake = ({ darkMode = false }) => {
                       Within 2 hours
                     </p>
                     <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                      Derrick reviews & approves
+                      MalToy reviews & approves
                     </p>
                   </div>
                 </div>
