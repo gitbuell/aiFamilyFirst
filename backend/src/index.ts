@@ -7,6 +7,7 @@ import { pool } from './db';
 import { PHI_ENABLED } from './middleware/phiGate';
 import authRoutes from './routes/auth';
 import intakeRoutes from './routes/intake';
+import pipelineRoutes from './routes/pipeline';
 
 const app = express();
 app.set('trust proxy', true); // behind Caddy; needed for correct req.ip in the audit log
@@ -29,6 +30,7 @@ app.get('/api/health', async (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/intake', intakeRoutes);
+app.use('/api/pipeline', pipelineRoutes);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

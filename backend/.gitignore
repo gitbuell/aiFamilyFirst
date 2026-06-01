@@ -1,3 +1,8 @@
 node_modules/
 dist/
 .env
+
+# The repo-root .gitignore is Python-style and has a `lib/` rule that wrongly ignores our
+# TypeScript source at src/lib/. Re-include the directory (must negate the dir before its files).
+!src/lib/
+!src/lib/**
