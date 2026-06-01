@@ -1,0 +1,43 @@
+# aiFamilyFirst Phase 2 — gated PHI stack. ISOLATED from all other apps.
+# The PHI database has NO host port (only reachable by the backend on the private network).
+# The backend binds host loopback only; public access is via a separate authenticated Caddy route.
+services:
+  aifamilyfirst-phi-db:
+    image: postgres:16-alpine
+    container_name: aifamilyfirst-phi-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: ${PGDATABASE}
+    volumes:
+      - aff_phi_data:/var/lib/postgresql/data
+    networks: [aff-phi-net]
+    # NOTE: deliberately NO `ports:` — the PHI DB is never exposed to the host.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aifamilyfirst-backend:
+    build: .
+    container_name: aifamilyfirst-backend
+    restart: always
+    env_file: .env
+    environment:
+      PGHOST: aifamilyfirst-phi-db
+      BIND_HOST: 0.0.0.0           # inside the container; published only to host loopback below
+    depends_on:
+      aifamilyfirst-phi-db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4003:4003"      # loopback only — Caddy fronts this on a gated route
+    networks: [aff-phi-net]
+
+networks:
+  aff-phi-net:
+    name: aff-phi-net
+
+volumes:
+  aff_phi_data:

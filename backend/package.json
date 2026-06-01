@@ -1,0 +1,28 @@
+{
+  "name": "aifamilyfirst-backend",
+  "version": "0.1.0",
+  "description": "aiFamilyFirst Phase 2 gated PHI backend (ICM/Gemini). HIPAA controls foundation. NOT public.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "migrate": "ts-node src/scripts/migrate.ts",
+    "genkey": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\""
+  },
+  "dependencies": {
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
+    "pg": "^8.10.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/pg": "^8.10.0"
+  }
+}
